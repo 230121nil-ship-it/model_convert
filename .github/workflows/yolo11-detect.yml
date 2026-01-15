@@ -1,4 +1,4 @@
-name: Convert Yolo26 Detect Models
+name: Convert Yolo11 Detect Models
 
 # 触发工作流的事件
 on:
@@ -17,7 +17,7 @@ jobs:
         runs-on: [ubuntu-22.04]
     runs-on: ${{ matrix.runs-on }}
     container:
-      image: ultralytics/ultralytics:8.4.0
+      image: ultralytics/ultralytics:8.3.89-cpu
       options: --privileged
 
     steps:
@@ -30,14 +30,12 @@ jobs:
     - name: Run build script
       run: |
         apt-get update && apt install -y --no-install-recommends wget
-        pip install onnxsim onnxscript
+        pip install onnxsim
         cd yolo
         mkdir -pv onnx
         cd onnx
-        wget https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26n.pt -O yolo.pt
-        python ../export_det_v26.pyc -w yolo.pt --sim
-        yolo export model=yolo26n.pt format=onnx opset=19
-        mv yolo26n.onnx yolo26n_original.onnx 
+        wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt -O yolo.pt
+        python ../export_det_v11.pyc -w yolo.pt --sim
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -75,7 +73,6 @@ jobs:
         mkdir -pv rknn
         cp -vr ${SRC_PATH}/onnx_artifacts/*.onnx ./rknn/
         python convert.pyc rknn/yolo.onnx rk3588 i8 rknn/yolo.rknn
-        python convert.pyc rknn/yolo26n_original.onnx rk3588 i8 rknn/yolo26n_original.rknn
 
 
     - name: Upload artifact
@@ -84,37 +81,37 @@ jobs:
         name: rknn_artifacts
         path: yolo/rknn/*.rknn
 
-  # onnx2om:
-  #   needs: [pt2onnx]
-  #   strategy:
-  #     matrix:
-  #       runs-on: [ubuntu-22.04]
-  #   runs-on: ${{ matrix.runs-on }}
-  #   container:
-  #     image: kaylor/atc
-  #     options: --privileged
+  onnx2om:
+    needs: [pt2onnx]
+    strategy:
+      matrix:
+        runs-on: [ubuntu-22.04]
+    runs-on: ${{ matrix.runs-on }}
+    container:
+      image: kaylor/atc
+      options: --privileged
 
-  #   steps:
-  #   - name: Download artifacts from pt2onnx
-  #     uses: actions/download-artifact@v4
-  #     with:
-  #       name: onnx_artifacts
-  #       path: onnx_artifacts
+    steps:
+    - name: Download artifacts from pt2onnx
+      uses: actions/download-artifact@v4
+      with:
+        name: onnx_artifacts
+        path: onnx_artifacts
 
-  #   - name: Run build script
-  #     shell: bash
-  #     run: |
-  #       SRC_PATH=$(pwd)
-  #       mkdir -pv om
-  #       cp -vr ${SRC_PATH}/onnx_artifacts/*.onnx ./om/
-  #       source /usr/local/Ascend/ascend-toolkit/set_env.sh
-  #       export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/x86_64-linux/devlib/:$LD_LIBRARY_PATH
-  #       cd om
-  #       atc --model=yolo.onnx --framework=5 --output=yolo --soc_version=Ascend310B4
+    - name: Run build script
+      shell: bash
+      run: |
+        SRC_PATH=$(pwd)
+        mkdir -pv om
+        cp -vr ${SRC_PATH}/onnx_artifacts/*.onnx ./om/
+        source /usr/local/Ascend/ascend-toolkit/set_env.sh
+        export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/x86_64-linux/devlib/:$LD_LIBRARY_PATH
+        cd om
+        atc --model=yolo.onnx --framework=5 --output=yolo --soc_version=Ascend310B4
 
 
-  #   - name: Upload artifact
-  #     uses: actions/upload-artifact@v4
-  #     with:
-  #       name: om_artifacts
-  #       path: om/*.om
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: om_artifacts
+        path: om/*.om
